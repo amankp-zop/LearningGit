@@ -18,6 +18,6 @@ func main() {
 	fmt.Println("Enter your salary : ")
 	fmt.Scanln(&salary)
 
-	fmt.Printf("Hello, %v. I am glad to know you are %v years old. Your salary will be %v rupees", name, age, salary)
+	fmt.Printf("Hello, %v. I am glad to know you are %v years old. Your salary will be %v rupees.", name, age, salary)
 
 }
