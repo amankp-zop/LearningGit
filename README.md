@@ -11,5 +11,4 @@ The purpose of this project is to:
 - Practice version control in a hands-on way.
 - Learn how to use branches, commits, merges, and resolve conflicts.
 - Get comfortable with GitHub (or any Git hosting platform).
-
-s
+- Working with the git branching and merging is a headache.
