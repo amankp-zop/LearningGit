@@ -49,4 +49,9 @@ func main() {
 
 	fmt.Println(swap(40, 50))
 
+	var name string
+
+	fmt.Scanln(&name)
+	fmt.Println(name)
+
 }
