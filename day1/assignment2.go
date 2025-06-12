@@ -6,6 +6,13 @@ import (
 	"strconv"
 )
 
+var currencyStore = [...]string{
+	"USD",
+	"INR",
+	"JPY",
+	"EUR",
+}
+
 var currencyMap = map[string]float64{
 	"USDINR": 85.00,
 	"USDUSD": 1,
@@ -32,6 +39,11 @@ func isValidCurrency(curr string) bool {
 }
 
 func validateInput(arr []string) bool {
+
+	if len(arr) == 1 && arr[0] == "--list" {
+		return true
+	}
+
 	if len(arr) != 3 {
 		return false
 	}
@@ -62,6 +74,17 @@ func main() {
 	fmt.Println(argsWithoutPath)
 
 	if validateInput(argsWithoutPath) {
+
+		if argsWithoutPath[0] == "--list" {
+			for i := 0; i < len(currencyStore); i++ {
+				for j := 0; j < len(currencyStore); j++ {
+					index := currencyStore[i] + currencyStore[j]
+					value := currencyMap[index]
+
+					fmt.Printf("The exchange rate for converting %v to %v is: %v \n", currencyStore[i], currencyStore[j], value)
+				}
+			}
+		}
 
 		convertedAmount := currencyConverter(amount, argsWithoutPath[1], argsWithoutPath[2])
 		fmt.Println(amount, argsWithoutPath[1], "is equal to", convertedAmount)
