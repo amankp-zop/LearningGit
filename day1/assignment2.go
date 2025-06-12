@@ -87,7 +87,7 @@ func main() {
 		}
 
 		convertedAmount := currencyConverter(amount, argsWithoutPath[1], argsWithoutPath[2])
-		fmt.Println(amount, argsWithoutPath[1], "is equal to", convertedAmount)
+		fmt.Println(amount, argsWithoutPath[1], "is equal to", convertedAmount, argsWithoutPath[2])
 
 	} else {
 		fmt.Println("The input needs to be in the following format: go run fileName Amount IntialCurrency ConvertedCurrency")
