@@ -84,6 +84,7 @@ func main() {
 					fmt.Printf("The exchange rate for converting %v to %v is: %v \n", currencyStore[i], currencyStore[j], value)
 				}
 			}
+			return
 		}
 
 		convertedAmount := currencyConverter(amount, argsWithoutPath[1], argsWithoutPath[2])
