@@ -1,0 +1,15 @@
+[INFO] Listening on port 8080
+[WARNING] Disk space below 15%
+[ERROR] Unable to reach authentication server
+[INFO] Scheduled backup completed
+[ERROR] File not found: config.yaml
+[WARNING] CPU temperature high
+[INFO] Connection established with client 192.168.1.45
+[ERROR] Permission denied while accessing /var/data
+[INFO] User 'admin' logged in
+[WARNING] Deprecated API usage detected
+[ERROR] Null pointer exception in module X
+[INFO] Service health check passed
+[WARNING] Unusual network activity detected
+[ERROR] Failed to initialize logging module
+[INFO] Task queue size: 42
