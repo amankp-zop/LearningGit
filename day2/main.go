@@ -71,19 +71,3 @@ func percent(count, total int) float64 {
 	}
 	return float64(count) / float64(total) * 100
 }
-
-var x = 5
-
-func main() {
-	x := 10
-	{
-		x := x + 1
-
-		{
-			x := x + 1
-			fmt.Println(x)
-		}
-
-		fmt.Println(x)
-	}
-}
