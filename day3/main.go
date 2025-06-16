@@ -144,7 +144,7 @@ func main() {
 
 		default:
 			// Handle invalid menu options
-			fmt.Println("Invalid option. Please choose 1–5.")
+			fmt.Println("Invalid option. Please choose 1–---5.")
 		}
 	}
 }
