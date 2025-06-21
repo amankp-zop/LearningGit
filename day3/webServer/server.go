@@ -1,189 +1,242 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
-// Task represents a single to-do item.
+var ErrMissingID = errors.New("missing ID")
+
+const pathParamsLength = 3
+
 type Task struct {
-	ID          int
-	Description string
-	Completed   bool
+	ID          int    `json:"id"`
+	Description string `json:"description"`
+	Completed   bool   `json:"completed"`
 }
 
-// TaskManager manages a list of tasks and ID generation.
-type TaskManager struct {
+type taskManager struct {
 	tasks     []Task
 	getNextID func() int
 }
 
-// IdGenerator returns a closure that generates incrementing IDs.
-func IdGenerator() func() int {
+func idGenerator() func() int {
 	id := 0
+
 	return func() int {
 		id++
+
 		return id
 	}
 }
 
-// AddTask adds a new task with the given description.
-func (tm *TaskManager) AddTask(description string) {
+func (tm *taskManager) addTask(description string) Task {
 	id := tm.getNextID()
-	task := Task{
+	newTask := Task{
 		ID:          id,
 		Description: description,
 		Completed:   false,
 	}
-	tm.tasks = append(tm.tasks, task)
-	fmt.Printf("Task Added: %d - %s\n", task.ID, task.Description)
+	tm.tasks = append(tm.tasks, newTask)
+
+	return newTask
 }
 
-// GetSpecificTask retrieves the description of a task by ID.
-func (tm *TaskManager) GetSpecificTask(id int) string {
-	for _, task := range tm.tasks {
-		if task.ID == id {
-			return task.Description
+func (tm *taskManager) getTaskByID(id int) (*Task, bool) {
+	for i := range tm.tasks {
+		if tm.tasks[i].ID == id {
+			return &tm.tasks[i], true
 		}
 	}
-	return fmt.Sprintf("Task with ID %d not found.", id)
+
+	return nil, false
 }
 
-// DeleteTask removes a task by ID.
-func (tm *TaskManager) DeleteTask(id int) {
+func (tm *taskManager) deleteTask(id int) bool {
 	for i, task := range tm.tasks {
 		if task.ID == id {
 			tm.tasks = append(tm.tasks[:i], tm.tasks[i+1:]...)
-			fmt.Printf("Deleted task %d: %s\n", id, task.Description)
-			return
+
+			return true
 		}
 	}
-	fmt.Printf("Task with ID %d not found.\n", id)
+
+	return false
 }
 
-func (tm *TaskManager) CompleteTask(id int) string {
-	for i, task := range tm.tasks {
-		if task.ID == id {
-			if task.Completed {
-				return fmt.Sprintf("Task %d is already completed.", id)
-			}
-			tm.tasks[i].Completed = true
-			return fmt.Sprintf("Marked task %d as completed.", id)
-		}
+func (tm *taskManager) completeTask(id int) (message string, statusCode int) {
+	task, found := tm.getTaskByID(id)
+
+	if !found {
+		return fmt.Sprintf("Task with ID %d not found.", id), http.StatusNotFound
 	}
-	return fmt.Sprintf("Task with ID %d not found.", id)
+
+	if task.Completed {
+		return fmt.Sprintf("Task %d is already completed.", id), http.StatusConflict
+	}
+
+	task.Completed = true
+
+	return fmt.Sprintf("Marked task %d as completed.", id), http.StatusAccepted
 }
 
-// HTTP handler for POST /tasks
-func (tm *TaskManager) handlePostTask(w http.ResponseWriter, r *http.Request) {
+func (tm *taskManager) handlePostTask(w http.ResponseWriter, r *http.Request) {
+	var err error
 	body, err := io.ReadAll(r.Body)
+
 	if err != nil {
-		http.Error(w, "Error reading request body", http.StatusBadRequest)
-		return
-	}
-	description := strings.TrimSpace(string(body))
-	if description == "" {
-		http.Error(w, "Task description is empty", http.StatusBadRequest)
-		return
-	}
-	tm.AddTask(description)
-	fmt.Fprintf(w, "Task created: %s", description)
-}
+		http.Error(w, `{"error":"Unable to read request body"}`, http.StatusBadRequest)
 
-// HTTP handler for DELETE /tasks/{id}
-func (tm *TaskManager) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 3 {
-		http.Error(w, "Missing task ID in URL", http.StatusBadRequest)
 		return
 	}
-	id, err := strconv.Atoi(parts[2])
+
+	var input struct {
+		Description string `json:"description"`
+	}
+
+	if err = json.Unmarshal(body, &input); err != nil || strings.TrimSpace(input.Description) == "" {
+		http.Error(w, `{"error":"Invalid or missing description"}`, http.StatusBadRequest)
+
+		return
+	}
+
+	newTask := tm.addTask(input.Description)
+	response, _ := json.Marshal(newTask)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_, err = w.Write(response)
+
 	if err != nil {
-		http.Error(w, "Invalid task ID", http.StatusBadRequest)
-		return
-	}
-	tm.DeleteTask(id)
-	fmt.Fprint(w, "Task deleted successfully")
-}
-
-func (tm *TaskManager) handleCompleteTask(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 {
-		http.Error(w, "Missing task ID", http.StatusBadRequest)
-		return
-	}
-
-	id, err := strconv.Atoi(parts[2])
-	if err != nil {
-		http.Error(w, "Invalid task ID", http.StatusBadRequest)
-		return
-	}
-
-	result := tm.CompleteTask(id)
-	if strings.Contains(result, "not found") {
-		http.Error(w, result, http.StatusNotFound)
-	} else {
-		fmt.Fprintln(w, result)
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
-// HTTP handler for GET /tasks/{id}
-func (tm *TaskManager) handleGetTask(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 3 {
-		http.Error(w, "Missing task ID in URL", http.StatusBadRequest)
-		return
-	}
-	id, err := strconv.Atoi(parts[2])
+func (tm *taskManager) handleGetTask(w http.ResponseWriter, r *http.Request) {
+	var err error
+	id, err := extractID(r.URL.Path)
+
 	if err != nil {
-		http.Error(w, "Invalid task ID", http.StatusBadRequest)
+		http.Error(w, `{"error":"Invalid task ID"}`, http.StatusBadRequest)
+
 		return
 	}
-	taskData := tm.GetSpecificTask(id)
-	fmt.Fprint(w, taskData)
+
+	task, found := tm.getTaskByID(id)
+	if !found {
+		http.Error(w, `{"error":"Task not found"}`, http.StatusNotFound)
+
+		return
+	}
+
+	response, _ := json.Marshal(task)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, err = w.Write(response)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+func (tm *taskManager) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
+	id, err := extractID(r.URL.Path)
+	if err != nil {
+		http.Error(w, `{"error":"Invalid task ID"}`, http.StatusBadRequest)
+
+		return
+	}
+
+	if deleted := tm.deleteTask(id); deleted {
+		w.WriteHeader(http.StatusNoContent)
+
+		return
+	}
+
+	http.Error(w, `{"error":"Task not found"}`, http.StatusNotFound)
+}
+
+func (tm *taskManager) handleCompleteTask(w http.ResponseWriter, r *http.Request) {
+	var err error
+	id, err := extractID(r.URL.Path)
+
+	if err != nil {
+		http.Error(w, `{"error":"Invalid task ID"}`, http.StatusBadRequest)
+		return
+	}
+
+	msg, status := tm.completeTask(id)
+	resp := map[string]string{"message": msg}
+	response, _ := json.Marshal(resp)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, err = w.Write(response)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func extractID(path string) (int, error) {
+	parts := strings.Split(path, "/")
+
+	if len(parts) < pathParamsLength {
+		return 0, ErrMissingID
+	}
+
+	return strconv.Atoi(parts[2])
 }
 
 func main() {
-	manager := &TaskManager{
-		getNextID: IdGenerator(),
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      nil, // Default ServeMux
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
-	// Example initial tasks
-	manager.AddTask("Go to Gym")
-	manager.AddTask("Buy groceries")
+	manager := &taskManager{
+		getNextID: idGenerator(),
+	}
 
-	// Routes
+	manager.addTask("Go to Gym")
+	manager.addTask("Buy groceries")
+
 	http.HandleFunc("/tasks", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			manager.handlePostTask(w, r)
 		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		}
 	})
 
 	http.HandleFunc("/tasks/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/complete") && r.Method == http.MethodPut {
-			manager.handleCompleteTask(w, r)
-			return
-		}
-
 		switch r.Method {
 		case http.MethodGet:
 			manager.handleGetTask(w, r)
 		case http.MethodDelete:
 			manager.handleDeleteTask(w, r)
+		case http.MethodPut:
+			manager.handleCompleteTask(w, r)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		}
 	})
 
-	fmt.Println("Server running on http://localhost:8080")
-	err := http.ListenAndServe(":8080", nil)
-	if err != nil {
-		fmt.Println("Server failed to start:", err)
-	}
+	fmt.Println("Server running at http://localhost:8080")
 
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
 }
