@@ -36,6 +36,20 @@ func findArea(s Shape) float64 {
 	return s.Area()
 }
 
+func cost(S Shape) float64 {
+	area := S.Area()
+
+	switch S.(type) {
+	case *Rectangle:
+		return 0.2 * float64(area)
+	case *Circle:
+		return 0.5 * float64(area)
+	default:
+		return 1 * float64(area)
+	}
+
+}
+
 func main() {
 	// Create a Rectangle instance.
 	rec := Rectangle{
@@ -52,4 +66,8 @@ func main() {
 	fmt.Println("The Area of the circle is:", findArea(&cir))
 	// Print the area of the rectangle.
 	fmt.Println("The Area of the rectangle is:", findArea(&rec))
+
+	fmt.Println("The cost of the rectangle is:", cost(&rec))
+	fmt.Println("The cost of the circle is:", cost(&cir))
+
 }
