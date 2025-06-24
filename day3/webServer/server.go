@@ -1,189 +1,186 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
-	"strings"
+	"sync"
+	"time"
 )
 
-// Task represents a single to-do item.
-type Task struct {
-	ID          int
-	Description string
-	Completed   bool
+type user struct {
+	Name string `json:"name"`
 }
 
-// TaskManager manages a list of tasks and ID generation.
-type TaskManager struct {
-	tasks     []Task
-	getNextID func() int
+type server struct {
+	mux       *http.ServeMux
+	userCache map[int]user
+	mutex     sync.RWMutex
 }
 
-// IdGenerator returns a closure that generates incrementing IDs.
-func IdGenerator() func() int {
-	id := 0
-	return func() int {
-		id++
-		return id
+func newServer() *server {
+	s := &server{
+		mux:       http.NewServeMux(),
+		userCache: make(map[int]user),
 	}
+
+	s.routes()
+
+	return s
 }
 
-// AddTask adds a new task with the given description.
-func (tm *TaskManager) AddTask(description string) {
-	id := tm.getNextID()
-	task := Task{
-		ID:          id,
-		Description: description,
-		Completed:   false,
-	}
-	tm.tasks = append(tm.tasks, task)
-	fmt.Printf("Task Added: %d - %s\n", task.ID, task.Description)
-}
-
-// GetSpecificTask retrieves the description of a task by ID.
-func (tm *TaskManager) GetSpecificTask(id int) string {
-	for _, task := range tm.tasks {
-		if task.ID == id {
-			return task.Description
-		}
-	}
-	return fmt.Sprintf("Task with ID %d not found.", id)
-}
-
-// DeleteTask removes a task by ID.
-func (tm *TaskManager) DeleteTask(id int) {
-	for i, task := range tm.tasks {
-		if task.ID == id {
-			tm.tasks = append(tm.tasks[:i], tm.tasks[i+1:]...)
-			fmt.Printf("Deleted task %d: %s\n", id, task.Description)
-			return
-		}
-	}
-	fmt.Printf("Task with ID %d not found.\n", id)
-}
-
-func (tm *TaskManager) CompleteTask(id int) string {
-	for i, task := range tm.tasks {
-		if task.ID == id {
-			if task.Completed {
-				return fmt.Sprintf("Task %d is already completed.", id)
-			}
-			tm.tasks[i].Completed = true
-			return fmt.Sprintf("Marked task %d as completed.", id)
-		}
-	}
-	return fmt.Sprintf("Task with ID %d not found.", id)
-}
-
-// HTTP handler for POST /tasks
-func (tm *TaskManager) handlePostTask(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Error reading request body", http.StatusBadRequest)
-		return
-	}
-	description := strings.TrimSpace(string(body))
-	if description == "" {
-		http.Error(w, "Task description is empty", http.StatusBadRequest)
-		return
-	}
-	tm.AddTask(description)
-	fmt.Fprintf(w, "Task created: %s", description)
-}
-
-// HTTP handler for DELETE /tasks/{id}
-func (tm *TaskManager) handleDeleteTask(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 3 {
-		http.Error(w, "Missing task ID in URL", http.StatusBadRequest)
-		return
-	}
-	id, err := strconv.Atoi(parts[2])
-	if err != nil {
-		http.Error(w, "Invalid task ID", http.StatusBadRequest)
-		return
-	}
-	tm.DeleteTask(id)
-	fmt.Fprint(w, "Task deleted successfully")
-}
-
-func (tm *TaskManager) handleCompleteTask(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 {
-		http.Error(w, "Missing task ID", http.StatusBadRequest)
-		return
-	}
-
-	id, err := strconv.Atoi(parts[2])
-	if err != nil {
-		http.Error(w, "Invalid task ID", http.StatusBadRequest)
-		return
-	}
-
-	result := tm.CompleteTask(id)
-	if strings.Contains(result, "not found") {
-		http.Error(w, result, http.StatusNotFound)
-	} else {
-		fmt.Fprintln(w, result)
-	}
-}
-
-// HTTP handler for GET /tasks/{id}
-func (tm *TaskManager) handleGetTask(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 3 {
-		http.Error(w, "Missing task ID in URL", http.StatusBadRequest)
-		return
-	}
-	id, err := strconv.Atoi(parts[2])
-	if err != nil {
-		http.Error(w, "Invalid task ID", http.StatusBadRequest)
-		return
-	}
-	taskData := tm.GetSpecificTask(id)
-	fmt.Fprint(w, taskData)
+func (s *server) routes() {
+	s.mux.HandleFunc("/", s.greetHandler)
+	s.mux.HandleFunc("POST /users", s.postHandler)
+	s.mux.HandleFunc("GET /users/{id}", s.getUserHandler)
+	s.mux.HandleFunc("DELETE /users/{id}", s.deleteUserHandler)
+	s.mux.HandleFunc("PUT /users/{id}", s.updateHandler)
 }
 
 func main() {
-	manager := &TaskManager{
-		getNextID: IdGenerator(),
+	s := newServer()
+
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      s.mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
-	// Example initial tasks
-	manager.AddTask("Go to Gym")
-	manager.AddTask("Buy groceries")
+	fmt.Println("Server starts at 8080")
 
-	// Routes
-	http.HandleFunc("/tasks", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			manager.handlePostTask(w, r)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	if err := server.ListenAndServe(); err != nil {
+		fmt.Println("Server error:", err)
+	}
+}
 
-	http.HandleFunc("/tasks/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/complete") && r.Method == http.MethodPut {
-			manager.handleCompleteTask(w, r)
-			return
-		}
+func (s *server) updateHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
 
-		switch r.Method {
-		case http.MethodGet:
-			manager.handleGetTask(w, r)
-		case http.MethodDelete:
-			manager.handleDeleteTask(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	var err error
+	id, err := strconv.Atoi(idStr)
 
-	fmt.Println("Server running on http://localhost:8080")
-	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
-		fmt.Println("Server failed to start:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
+	if _, ok := s.userCache[id]; !ok {
+		http.Error(w, "UserNotFound", http.StatusBadRequest)
+	}
+
+	var usr user
+	err = json.NewDecoder(r.Body).Decode(&usr)
+
+	if err != nil || usr.Name == "" {
+		http.Error(w, "Invalid user payload", http.StatusBadRequest)
+		return
+	}
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.userCache[id] = usr
+
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *server) deleteUserHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.Atoi(idStr)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if _, ok := s.userCache[id]; !ok {
+		http.Error(w, "User Not Found", http.StatusNotFound)
+		return
+	}
+
+	delete(s.userCache, id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *server) getUserHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+
+	var err error
+
+	id, err := strconv.Atoi(idStr)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	s.mutex.RLock()
+	usr, ok := s.userCache[id]
+	s.mutex.RUnlock()
+
+	if !ok {
+		http.Error(w, "User Not Found", http.StatusNotFound)
+		return
+	}
+
+	j, err := json.Marshal(usr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_, err = w.Write(j)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (*server) greetHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+
+	var err error
+
+	response := map[string]string{
+		"Message": "Hello World using JSON in GOLANG",
+	}
+
+	msg, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = w.Write(msg)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (s *server) postHandler(w http.ResponseWriter, r *http.Request) {
+	var usr user
+	err := json.NewDecoder(r.Body).Decode(&usr)
+
+	if err != nil || usr.Name == "" {
+		http.Error(w, "Invalid user payload", http.StatusBadRequest)
+		return
+	}
+
+	s.mutex.Lock()
+	s.userCache[len(s.userCache)+1] = usr
+	s.mutex.Unlock()
+
+	w.WriteHeader(http.StatusNoContent)
 }
