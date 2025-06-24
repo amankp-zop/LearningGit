@@ -62,7 +62,7 @@ func (s *server) updateHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	id, err := strconv.Atoi(idStr)
 
-	if err != nil {
+	if err != nil || id < 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
