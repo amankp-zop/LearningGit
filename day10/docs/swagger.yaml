@@ -1,0 +1,253 @@
+basePath: /
+definitions:
+  taskmodel.Task:
+    properties:
+      description:
+        type: string
+      id:
+        type: integer
+      is_completed:
+        type: boolean
+      title:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  usermodel.User:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: aman@example.com
+    name: Aman
+  description: This is a sample server for managing tasks.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://example.com/terms/
+  title: Task Manager API
+  version: "1.0"
+paths:
+  /tasks:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new task and stores it in the database
+      parameters:
+      - description: Task to be created
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/taskmodel.Task'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/taskmodel.Task'
+        "400":
+          description: Invalid Task Body or Service Error
+          schema:
+            type: string
+        "500":
+          description: Unable to Encode Task
+          schema:
+            type: string
+      summary: Create a new task
+      tags:
+      - tasks
+    put:
+      consumes:
+      - application/json
+      description: Updates a task's information such as title, status, etc.
+      parameters:
+      - description: Task to be updated
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/taskmodel.Task'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/taskmodel.Task'
+        "400":
+          description: Invalid task body or update error
+          schema:
+            type: string
+        "500":
+          description: Unable to encode response
+          schema:
+            type: string
+      summary: Update a task
+      tags:
+      - tasks
+  /tasks/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a task by its ID
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task deleted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid task ID or deletion error
+          schema:
+            type: string
+        "500":
+          description: Unable to encode response
+          schema:
+            type: string
+      summary: Delete a task
+      tags:
+      - tasks
+  /tasks/{id}/complete:
+    patch:
+      consumes:
+      - application/json
+      description: Marks a task as complete using its ID
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Task marked as complete
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid task ID or update error
+          schema:
+            type: string
+        "500":
+          description: Unable to encode response
+          schema:
+            type: string
+      summary: Mark task as complete
+      tags:
+      - tasks
+  /tasks/user/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Returns all tasks assigned to a specific user by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/taskmodel.Task'
+            type: array
+        "400":
+          description: Invalid user ID or retrieval error
+          schema:
+            type: string
+        "500":
+          description: Unable to encode tasks
+          schema:
+            type: string
+      summary: Get all tasks for a user
+      tags:
+      - tasks
+  /users:
+    post:
+      consumes:
+      - application/json
+      description: Adds a new user to the system
+      parameters:
+      - description: User to create
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/usermodel.User'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/usermodel.User'
+        "400":
+          description: Invalid request body
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Create a new user
+      tags:
+      - users
+  /users/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves a user from the system by their ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/usermodel.User'
+        "400":
+          description: Invalid user ID
+          schema:
+            type: string
+        "404":
+          description: User not found
+          schema:
+            type: string
+        "500":
+          description: Unable to encode response
+          schema:
+            type: string
+      summary: Get user by ID
+      tags:
+      - users
+schemes:
+- http
+swagger: "2.0"
